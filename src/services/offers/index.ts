@@ -71,15 +71,30 @@ export async function postOffer(offer: OfferData): Promise<boolean> {
   return ok;
 }
 
-export async function canPostOrUpdate(source: string, sourceId: string, _newPrice?: number, offerTitle?: string): Promise<boolean> {
+function daysSince(date: Date | null | undefined): number {
+  if (!date) return 999;
+  const diff = Date.now() - new Date(date).getTime();
+  return diff / (1000 * 60 * 60 * 24);
+}
+
+export async function canPostOrUpdate(source: string, sourceId: string, newPrice?: number, offerTitle?: string): Promise<boolean> {
   const hash = offerHash(source, sourceId);
   const existing = await prisma.offer.findUnique({ where: { hash } });
-  if (existing) return false;
 
+  if (existing) {
+    /* Same product already posted — only repost if 4+ days and price dropped */
+    if (daysSince(existing.postedAt) < 4) return false;
+    if (newPrice == null || existing.price == null || newPrice >= existing.price) return false;
+    return true;
+  }
+
+  /* Title-based dedup — same title may be same product under different ID */
   if (offerTitle) {
     const tHash = titleHash(offerTitle);
     const sameTitle = await prisma.offer.findFirst({ where: { titleHash: tHash } });
-    if (sameTitle) return false;
+    if (sameTitle) {
+      if (daysSince(sameTitle.postedAt) < 4) return false;
+    }
   }
 
   return true;
