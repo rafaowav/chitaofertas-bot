@@ -66,6 +66,34 @@ export async function replyToMessage(chatId: string | number, text: string, repl
   }
 }
 
+/* ───────── Reply with photo ───────── */
+
+export async function replyWithPhoto(chatId: string | number, photoUrl: string, caption: string, replyToMessageId?: number): Promise<boolean> {
+  try {
+    const body: Record<string, unknown> = {
+      chat_id: chatId,
+      photo: photoUrl,
+      caption,
+      parse_mode: 'HTML',
+    };
+    if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
+    const res = await fetch(`${TELEGRAM_API}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json() as SendPhotoResult;
+    if (!data.ok) {
+      logger.error({ err: data.description }, 'Telegram replyWithPhoto failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, 'Telegram replyWithPhoto error');
+    return false;
+  }
+}
+
 /* ───────── Existing send functions (unchanged) ───────── */
 
 interface SendPhotoResult {

@@ -1,7 +1,8 @@
 import { logger } from '../../lib/logger.js';
+import { formatPrice } from '../../lib/utils.js';
 import { searchProducts, filterRelevantProducts, enrichProduct } from '../shopee/index.js';
 import { canPostOrUpdate } from '../offers/index.js';
-import { replyToMessage, sendMessageToChat } from './index.js';
+import { replyToMessage, sendMessageToChat, replyWithPhoto } from './index.js';
 
 /* ───────── Types ───────── */
 
@@ -15,7 +16,7 @@ interface TelegramUpdate {
   };
 }
 
-const MAX_DM_RESULTS = 3;
+const MAX_DM_RESULTS = 5;
 
 /* ───────── Webhook entry point ───────── */
 
@@ -58,7 +59,7 @@ async function handleSearch(chatId: number, keyword: string, replyToMsgId: numbe
 
     const filtered = filterRelevantProducts(products, keyword);
 
-    const selected: Array<{ title: string; price: number; ratingStar?: number; soldCount?: number; affiliateLink: string }> = [];
+    const selected: Array<{ title: string; price: number; currency?: string; ratingStar?: number; soldCount?: number; affiliateLink: string; imageUrl?: string }> = [];
 
     for (const product of filtered) {
       if (selected.length >= MAX_DM_RESULTS) break;
@@ -68,9 +69,11 @@ async function handleSearch(chatId: number, keyword: string, replyToMsgId: numbe
       selected.push({
         title: product.title,
         price: product.price,
+        currency: product.currency,
         ratingStar: product.ratingStar,
         soldCount: product.soldCount,
         affiliateLink: product.affiliateLink,
+        imageUrl: product.imageUrl,
       });
     }
 
@@ -79,30 +82,28 @@ async function handleSearch(chatId: number, keyword: string, replyToMsgId: numbe
       return;
     }
 
-    const lines: string[] = [];
-    lines.push(`🔍 <b>Resultados para "${keyword}"</b>`);
-    lines.push('');
+    const headerText = `🔍 <b>Resultados para "${keyword}"</b>`;
+    await replyToMessage(chatId, headerText, replyToMsgId);
 
-    const emojis = ['1️⃣', '2️⃣', '3️⃣'];
-    for (let i = 0; i < selected.length; i++) {
-      const item = selected[i];
-      lines.push(`${emojis[i]} <b>${item.title}</b>`);
-      lines.push(`💰 <b>R$ ${item.price.toFixed(2)}</b>`);
+    for (const item of selected) {
+      const captionLines: string[] = [];
+      captionLines.push(`📦 <b>${item.title}</b>`);
+      captionLines.push(`💰 <b>${formatPrice(item.price, item.currency)}</b>`);
       const rating = item.ratingStar != null ? `${item.ratingStar.toFixed(1)}` : '?';
       const sold = item.soldCount != null ? `${item.soldCount.toLocaleString('pt-BR')} vendidos` : '';
-      lines.push(`⭐ ${rating} estrelas${sold ? ` | 📦 ${sold}` : ''}`);
-      lines.push(`🔗 ${item.affiliateLink}`);
-      if (i < selected.length - 1) lines.push('');
-    }
+      captionLines.push(`⭐ ${rating} estrelas${sold ? ` | 📦 ${sold}` : ''}`);
+      captionLines.push(`🔗 ${item.affiliateLink}`);
+      captionLines.push('');
+      captionLines.push('💳 Mais desconto com Pix');
+      captionLines.push('🎟️ Mais desconto usando cupom da loja');
+      const caption = captionLines.join('\n');
 
-    if (selected.length > 0) {
-      lines.push('');
-      lines.push('💳 Mais desconto com Pix');
-      lines.push('🎟️ Mais desconto usando cupom da loja');
+      if (item.imageUrl) {
+        await replyWithPhoto(chatId, item.imageUrl, caption);
+      } else {
+        await replyToMessage(chatId, caption);
+      }
     }
-
-    const text = lines.join('\n');
-    await replyToMessage(chatId, text, replyToMsgId);
   } catch (err) {
     logger.error({ err, keyword }, 'Search failed for user');
     await replyToMessage(chatId, `Erro ao buscar "${keyword}". Tente novamente mais tarde.`, replyToMsgId);
