@@ -191,6 +191,21 @@ function requireShopeeEnv(): void {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Direct keyword search (no cursor advancement)                     */
+/*                                                                     */
+/*  Used by the Telegram DM assistant — searches without affecting     */
+/*  the scheduled cron cursor state.                                   */
+/* ------------------------------------------------------------------ */
+
+export async function searchProducts(keyword: string, limit = 5): Promise<ShopeeProduct[]> {
+  requireShopeeEnv();
+  const variables: Record<string, unknown> = { keyword, limit, sortType: 1, page: 1 };
+  const data = await graphqlRequest<ProductOfferResponse>(PRODUCTS_QUERY, variables);
+  const nodes = data.productOfferV2?.nodes ?? [];
+  return nodes.map(normalizeNode).filter(isProductRated);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Evaluation / Rating filter                                        */
 /*                                                                     */
 /*  Only return products with meaningful social proof.                 */

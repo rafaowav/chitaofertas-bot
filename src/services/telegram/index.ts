@@ -6,6 +6,68 @@ const TELEGRAM_API = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
 export type ParseMode = 'HTML' | 'MarkdownV2' | 'Markdown';
 
+/* ───────── Webhook ───────── */
+
+export async function setWebhook(url: string): Promise<void> {
+  const res = await fetch(`${TELEGRAM_API}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, allowed_updates: ['message'] }),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    logger.error({ err: data.description }, 'Failed to set Telegram webhook');
+  } else {
+    logger.info({ webhookUrl: url }, 'Telegram webhook registered');
+  }
+}
+
+/* ───────── Send message (to any chat) ───────── */
+
+export async function sendMessageToChat(chatId: string | number, text: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: false }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      logger.error({ err: data.description }, 'Telegram sendMessage failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, 'Telegram sendMessage error');
+    return false;
+  }
+}
+
+/* ───────── Reply to a message ───────── */
+
+export async function replyToMessage(chatId: string | number, text: string, replyToMessageId?: number): Promise<boolean> {
+  try {
+    const body: Record<string, unknown> = { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: false };
+    if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
+    const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      logger.error({ err: data.description }, 'Telegram reply failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, 'Telegram reply error');
+    return false;
+  }
+}
+
+/* ───────── Existing send functions (unchanged) ───────── */
+
 interface SendPhotoResult {
   ok: boolean;
   description?: string;
