@@ -35,6 +35,43 @@ export function buildTelegramMessage(offer: OfferData): TelegramMessage {
   return { text: lines.join('\n'), imageUrl: offer.imageUrl, buttonUrl: '', buttonLabel: '' };
 }
 
+export function buildPriceDropMessage(offer: OfferData, oldPrice: number, dropAmount: number, dropPct: number): TelegramMessage {
+  const lines: string[] = [];
+
+  lines.push('📉 PREÇO CAIU! 📉');
+  lines.push('');
+  lines.push(`<b>${truncate(offer.title, 200)}</b>`);
+  lines.push('');
+  lines.push(`De: <b>${formatPrice(oldPrice, offer.currency)}</b>`);
+  lines.push(`Por: <b>${formatPrice(offer.price ?? 0, offer.currency)}</b>`);
+  lines.push(`📉 Economia de <b>${formatPrice(dropAmount, offer.currency)} (-${Math.round(dropPct)}%)</b>`);
+  lines.push('');
+  lines.push('💳 Mais desconto com Pix');
+  lines.push('🎟️ Mais desconto usando cupom da loja');
+  lines.push('');
+  lines.push(`<i>Via Shopee</i>`);
+  lines.push('');
+  lines.push(`<b>LINK ✅</b> ${offer.affiliateUrl}`);
+
+  return { text: lines.join('\n'), imageUrl: offer.imageUrl, buttonUrl: '', buttonLabel: '' };
+}
+
+export async function notifyPriceDrop(offer: OfferData, oldPrice: number, dropAmount: number, dropPct: number): Promise<boolean> {
+  const msg = buildPriceDropMessage(offer, oldPrice, dropAmount, dropPct);
+  const ok = await sendTelegramPost(env.TELEGRAM_CHAT_ID, msg);
+
+  if (ok) {
+    logger.info(
+      { source: offer.source, title: offer.title, oldPrice, newPrice: offer.price, dropPct: Math.round(dropPct) },
+      'Price drop notified',
+    );
+  } else {
+    logger.error({ source: offer.source, title: offer.title }, 'Failed to notify price drop');
+  }
+
+  return ok;
+}
+
 export async function postOffer(offer: OfferData): Promise<boolean> {
   const msg = buildTelegramMessage(offer);
   const ok = await sendTelegramPost(env.TELEGRAM_CHAT_ID, msg);

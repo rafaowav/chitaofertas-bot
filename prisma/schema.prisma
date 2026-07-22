@@ -32,6 +32,11 @@ model Offer {
   postedAt   DateTime?
   createdAt  DateTime @default(now())
 
+  // Price drop monitoring
+  lastPriceCheckAt      DateTime?
+  lastNotifiedDropPrice Float?
+  lastNotifiedDropAt    DateTime?
+
   @@index([source, posted])
   @@index([hash])
 }

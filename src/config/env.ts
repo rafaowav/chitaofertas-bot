@@ -34,6 +34,12 @@ export const env = {
 
   // Scheduling
   CRON_INTERVAL: optional('CRON_INTERVAL', '* * * * *'),
+
+  // Price drop monitoring
+  PRICE_DROP_CRON:         optional('PRICE_DROP_CRON', '0 */6 * * *'),
+  PRICE_DROP_THRESHOLD:    optional('PRICE_DROP_THRESHOLD', '5'),
+  PRICE_DROP_MIN_AMOUNT:   optional('PRICE_DROP_MIN_AMOUNT', '5'),
+  PRICE_CHECK_BATCH_SIZE:  optional('PRICE_CHECK_BATCH_SIZE', '20'),
 } as const;
 
 export type Env = typeof env;

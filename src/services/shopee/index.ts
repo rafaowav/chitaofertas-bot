@@ -197,12 +197,51 @@ function requireShopeeEnv(): void {
 /*  the scheduled cron cursor state.                                   */
 /* ------------------------------------------------------------------ */
 
-export async function searchProducts(keyword: string, limit = 5): Promise<ShopeeProduct[]> {
+export async function searchProducts(keyword: string, limit = 15): Promise<ShopeeProduct[]> {
   requireShopeeEnv();
   const variables: Record<string, unknown> = { keyword, limit, sortType: 1, page: 1 };
   const data = await graphqlRequest<ProductOfferResponse>(PRODUCTS_QUERY, variables);
   const nodes = data.productOfferV2?.nodes ?? [];
   return nodes.map(normalizeNode).filter(isProductRated);
+}
+
+const ACCESSORY_TERMS = new Set([
+  'capa', 'cabo', 'película', 'pelicula', 'case', 'carregador',
+  'fone', 'suporte', 'suport', 'proteção', 'protetor', 'adesivo',
+]);
+
+/** Re-rank products by title relevance to the search keyword.
+ *  Boosts exact keyword matches and strong social proof;
+ *  penalizes accessories when the keyword is not about accessories. */
+export function rankSearchProducts(products: ShopeeProduct[], keyword: string): ShopeeProduct[] {
+  const terms = keyword.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return products;
+
+  const keywordIsAccessory = terms.some((t) => ACCESSORY_TERMS.has(t));
+
+  const scored = products.map((product) => {
+    const title = product.title.toLowerCase();
+    let score = 0;
+
+    const matchCount = terms.filter((t) => title.includes(t)).length;
+    if (matchCount === terms.length) {
+      score += 5;
+    } else if (matchCount >= Math.ceil(terms.length / 2)) {
+      score += 2;
+    }
+
+    if (product.ratingStar != null && product.ratingStar >= 4.5) score += 1;
+    if (product.soldCount != null && product.soldCount >= 1000) score += 1;
+    if (product.ratingStar != null && product.ratingStar < 3) score -= 2;
+
+    const isAccessory = ACCESSORY_TERMS.has(title.split(/\s+/).find((w) => ACCESSORY_TERMS.has(w)) ?? '');
+    if (isAccessory && !keywordIsAccessory) score -= 5;
+
+    return { product, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((i) => i.product);
 }
 
 /* ------------------------------------------------------------------ */
@@ -265,7 +304,7 @@ function normalizeNode(node: ProductOfferNode): ShopeeProduct {
     affiliateEffectivePrice: currentPrice,
     couponDiscountAmount: undefined,
     pixDiscountAmount: undefined,
-    estimatedFinalPrice: node.priceMin != null ? node.priceMin : undefined,
+    estimatedFinalPrice: node.priceMin != null ? Number(node.priceMin) : undefined,
     currency: 'BRL',
     affiliateLink: node.offerLink ?? '',
     productLink: node.productLink,
@@ -273,7 +312,7 @@ function normalizeNode(node: ProductOfferNode): ShopeeProduct {
     description: undefined,
     discountRate: node.priceDiscountRate,
     commissionRate: node.commissionRate ? Math.round(Number(node.commissionRate) * 100) : undefined,
-    ratingStar: node.ratingStar,
+    ratingStar: node.ratingStar != null ? Number(node.ratingStar) : undefined,
     soldCount: node.sales ?? undefined,
   };
 }

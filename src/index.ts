@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { env } from './config/env.js';
 import { connectDb, disconnectDb } from './db/index.js';
 import { startScheduler } from './jobs/scheduler.js';
+import { startPriceMonitor } from './jobs/priceMonitorJob.js';
 import { logger } from './lib/logger.js';
 import { setWebhook } from './services/telegram/index.js';
 import { handleUpdate } from './services/telegram/handler.js';
@@ -11,6 +12,7 @@ async function main(): Promise<void> {
 
   await connectDb();
   startScheduler();
+  startPriceMonitor();
 
   const WEBHOOK_PATH = '/webhook';
   const WEBHOOK_URL = `https://bot-ofertas-shopee.fly.dev${WEBHOOK_PATH}`;
