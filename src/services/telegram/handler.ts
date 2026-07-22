@@ -1,5 +1,5 @@
 import { logger } from '../../lib/logger.js';
-import { searchProducts, rankSearchProducts, enrichProduct } from '../shopee/index.js';
+import { searchProducts, filterRelevantProducts, enrichProduct } from '../shopee/index.js';
 import { canPostOrUpdate } from '../offers/index.js';
 import { replyToMessage, sendMessageToChat } from './index.js';
 
@@ -56,11 +56,11 @@ async function handleSearch(chatId: number, keyword: string, replyToMsgId: numbe
       return;
     }
 
-    const ranked = rankSearchProducts(products, keyword);
+    const filtered = filterRelevantProducts(products, keyword);
 
     const selected: Array<{ title: string; price: number; ratingStar?: number; soldCount?: number; affiliateLink: string }> = [];
 
-    for (const product of ranked) {
+    for (const product of filtered) {
       if (selected.length >= MAX_DM_RESULTS) break;
       const sourceId = String(product.itemId);
       const canPost = await canPostOrUpdate('shopee', sourceId, product.price, product.title);
