@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Offer {
+  id         String   @id @default(cuid())
+  source     String
+  sourceId   String
+  title      String
+  description String?
+  price      Float?
+  originalPrice    Float?
+  productDiscountAmount Float?  // originalPrice - price when originalPrice > price
+  couponDiscountAmount  Float?  // from TMAPI shop_vouchers
+  pixDiscountAmount     Float?  // not from Shopee Affiliate API; null until source added
+  estimatedFinalPrice   Float?  // priceMin from API
+  hasRealDiscount       Boolean?
+  currency   String?
+  imageUrl   String?
+  affiliateUrl String
+  discountRate Int?
+  displayedDiscountPercent Int?
+  commissionRate Float?
+
+  // Rating / social proof
+  ratingStar     Float?
+  soldCount      Int?
+
+  // Scrape enrichment metadata
+  originalPriceSource       String?  // 'product_price_before_discount' | 'model_price_before_discount'
+  scrapeHasVariants          Boolean?
+  scrapeExactVariantMatch    Boolean?
+
+  titleHash  String?
+  hash       String   @unique
+  posted     Boolean  @default(false)
+  postedAt   DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([source, posted])
+  @@index([hash])
+}
+
+model BotCursor {
+  id              String @id @default("default")
+  shopeeKeywordIndex  Int    @default(0)
+  shopeeSortTypeIndex Int    @default(0)
+  shopeePage          Int    @default(1)
+}

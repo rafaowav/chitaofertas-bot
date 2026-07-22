@@ -1,0 +1,31 @@
+{
+  "name": "bot-telegram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram deals bot — posts affiliate offers from Shopee and Amazon to a Telegram group",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "test:offer": "tsx src/test-offer.ts",
+    "postinstall": "prisma generate",
+    "deploy:build": "prisma generate && prisma db push && tsc"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.0",
+    "dotenv": "^16.4.7",
+    "node-cron": "^3.0.3",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "prisma": "^6.2.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
