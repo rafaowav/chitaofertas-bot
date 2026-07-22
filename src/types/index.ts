@@ -9,46 +9,26 @@ export interface OfferData {
   title: string;
   description?: string;
 
-  /* ---- Core pricing (real source fields only) ---- */
+  /* ---- Core pricing ---- */
   /** Current selling price — from Shopee Affiliate API (priceMin) */
   price?: number;
-  /** Real original crossed-out price — from Shopee product page scrape only */
-  originalPrice?: number;
-  /** originalPrice - price when both are real and original > price */
-  productDiscountAmount?: number;
   /** Store-coupon discount */
   couponDiscountAmount?: number;
-  /** Pix / payment-method discount */
-  pixDiscountAmount?: number;
   /** Estimated final checkout price — priceMin from Shopee Affiliate API */
   estimatedFinalPrice?: number;
-  /** True when originalPrice exists and is strictly > affiliate price */
-  hasRealDiscount?: boolean;
 
   currency?: string;
   imageUrl?: string;
   affiliateUrl: string;
 
-  /** priceDiscountRate from Shopee Affiliate API (percentage, e.g. 47 = 47%).
-   *  Stored for reference but NEVER used to derive originalPrice. */
+  /** priceDiscountRate from Shopee Affiliate API (percentage, e.g. 47) */
   discountRate?: number;
-  /** Discount badge/percentage from the product page (e.g. 57 for 57%).
-   *  Where available, this is the page-displayed value — not calculated. */
-  displayedDiscountPercent?: number;
   commissionRate?: number;
 
   /** Rating star (0-5) from Shopee Affiliate API */
   ratingStar?: number;
   /** Number of items sold */
   soldCount?: number;
-
-  /* ---- Scrape enrichment metadata ---- */
-  /** Which field from the product page supplied originalPrice */
-  originalPriceSource?: 'product_price_before_discount' | 'model_price_before_discount';
-  /** Product has multiple models/variants */
-  scrapeHasVariants?: boolean;
-  /** Could match affiliate price to a specific model/variant */
-  scrapeExactVariantMatch?: boolean;
 }
 
 export interface TelegramMessage {
@@ -94,12 +74,8 @@ export interface AmazonOfferInput {
   title: string;
   description?: string;
   price?: number;
-  originalPrice?: number;
-  productDiscountAmount?: number;
   couponDiscountAmount?: number;
-  pixDiscountAmount?: number;
   estimatedFinalPrice?: number;
-  hasRealDiscount?: boolean;
   currency?: string;
   imageUrl?: string;
   affiliateUrl: string;

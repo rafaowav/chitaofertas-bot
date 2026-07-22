@@ -28,12 +28,9 @@ export const env = {
   SHOPEE_SECRET: optional('SHOPEE_SECRET', ''),
   SHOPEE_BASE_URL: optional('SHOPEE_BASE_URL', 'https://open-api.affiliate.shopee.com.br/graphql'),
 
-  // Shopee Product Page Scraper (source B — free secondary source)
-  // Fetches public product page to extract the real crossed-out price
+  // Shopee Product Page Scraper (source B — no longer functional)
+  // Shopee blocks all non-browser API calls. Bot uses affiliate API pricing only.
   SHOPEE_SCRAPE_BASE_URL: optional('SHOPEE_SCRAPE_BASE_URL', 'https://shopee.com.br'),
-  SHOPEE_SCRAPE_PRICE_DIVISOR: optional('SHOPEE_SCRAPE_PRICE_DIVISOR', '100000'),
-  SHOPEE_SCRAPE_TIMEOUT_MS: optional('SHOPEE_SCRAPE_TIMEOUT_MS', '15000'),
-  SHOPEE_SCRAPE_MAX_RETRIES: optional('SHOPEE_SCRAPE_MAX_RETRIES', '2'),
 
   // Scheduling
   CRON_INTERVAL: optional('CRON_INTERVAL', '* * * * *'),

@@ -14,27 +14,17 @@ model Offer {
   title      String
   description String?
   price      Float?
-  originalPrice    Float?
-  productDiscountAmount Float?  // originalPrice - price when originalPrice > price
-  couponDiscountAmount  Float?  // from TMAPI shop_vouchers
-  pixDiscountAmount     Float?  // not from Shopee Affiliate API; null until source added
-  estimatedFinalPrice   Float?  // priceMin from API
-  hasRealDiscount       Boolean?
+  couponDiscountAmount  Float?
+  estimatedFinalPrice   Float?
   currency   String?
   imageUrl   String?
   affiliateUrl String
   discountRate Int?
-  displayedDiscountPercent Int?
   commissionRate Float?
 
   // Rating / social proof
   ratingStar     Float?
   soldCount      Int?
-
-  // Scrape enrichment metadata
-  originalPriceSource       String?  // 'product_price_before_discount' | 'model_price_before_discount'
-  scrapeHasVariants          Boolean?
-  scrapeExactVariantMatch    Boolean?
 
   titleHash  String?
   hash       String   @unique

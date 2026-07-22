@@ -4,47 +4,35 @@ Bot que descobre ofertas da Shopee via API de Afiliados e publica em grupo do Te
 
 ## Como funciona
 
-O bot usa duas fontes de dados:
+O bot usa a **Shopee Affiliate Open API (GraphQL)** para descobrir produtos, obter o link de afiliado e o preço atual. Produtos sem avaliação (rating = 0 e sem vendas) são filtrados automaticamente.
 
-- **Source A** — Shopee Affiliate Open API (GraphQL): descoberta de produtos, link de afiliado, preço mínimo, rating, vendas
-- **Source B** — Página pública do produto Shopee: preço original riscado, desconto exibido, cupons da loja, variações
+O preço exibido na mensagem é o `priceMin` da API de Afiliados — o mesmo preço vinculado ao link de rastreamento.
 
-O fluxo combina as duas: a API de afiliados descobre os produtos e fornece o link de rastreamento, enquanto a página do produto enriquece os dados de preço e desconto. O bot só publica produtos que tenham avaliação (rating > 0 ou vendas > 0).
+> **Nota:** Anteriormente o bot tentava enriquecer os dados com a página pública do produto Shopee (Source B) para extrair preço original riscado e cupons. A Shopee passou a bloquear todas as chamadas de API não-navegador (erro 90309999), tornando essa abordagem inviável. O bot opera exclusivamente com os dados da API de Afiliados.
 
-## Fluxo completo
+## Fluxo
 
 ```
 Cron (a cada 1 minuto)
   │
   ▼
-API de Afiliados (Source A)
+API de Afiliados (productOfferV2)
   ├─ 77 keywords + 3 sort types + páginas 1-20
-  ├─ productOfferV2 (GraphQL)
-  └─ retorna: productId, shopId, priceMin, link afiliado, ratingStar, sales
+  └─ retorna: priceMin, link afiliado, ratingStar, sales
   │
   ▼
 Filtro de avaliação
-  ├─ só produtos com ratingStar > 0 ou soldCount > 0
-  └─ produtos sem avaliação são ignorados
-  │
-  ▼
-Página do produto (Source B)
-  ├─ GET /api/v4/pdp/get_pc (tentativa 1)
-  ├─ HTML / __NEXT_DATA__ (fallback)
-  ├─ extrai: price_before_discount, price, discount badge, shop_vouchers
-  └─ resolução de variantes por modelo
+  └─ só produtos com ratingStar > 0 ou soldCount > 0
   │
   ▼
 Enriquecimento
-  ├─ preço exibido = preço da API de afiliados
-  ├─ dados da página armazenados para referência
-  └─ cupom da loja extraído quando disponível
+  └─ dados da API de Afiliados → OfferData
   │
   ▼
 Mensagem Telegram
   ├─ título + preço + link de afiliado
-  ├─ "Mais desconto com Pix"
-  └─ "Mais desconto usando cupom da loja"
+  ├─ "💳 Mais desconto com Pix"
+  └─ "🎟️ Mais desconto usando cupom da loja"
   │
   ▼
 Persistência
@@ -58,7 +46,6 @@ Persistência
 - **Agendador:** node-cron
 - **Logging:** Pino
 - **Deploy:** Docker / Fly.io
-- **Gerenciamento:** PM2 (Oracle Cloud)
 
 ## Setup
 
@@ -102,20 +89,6 @@ fly deploy
 
 O `fly.toml` executa `prisma db push` automaticamente no release.
 
-### Oracle Cloud (Free Tier)
-
-```bash
-# Na VM Ubuntu
-git clone https://github.com/rafaowav/chitaofertas-bot.git
-cd chitaofertas-bot
-cp .env.example .env
-nano .env
-pnpm install
-pnpm db:push
-pm2 start ecosystem.config.js
-pm2 save
-```
-
 ## Estrutura
 
 ```
@@ -130,9 +103,7 @@ src/
 ├── jobs/
 │   └── scheduler.ts            # cron job
 ├── services/
-│   ├── shopee/
-│   │   ├── index.ts            # API de Afiliados + enriquecimento
-│   │   └── detail-client.ts    # scraper da página do produto
+│   ├── shopee/index.ts         # API de Afiliados + enriquecimento
 │   ├── offers/index.ts         # formatação e postagem
 │   ├── telegram/index.ts       # envio ao Telegram
 │   ├── amazon/index.ts         # ofertas manuais (Amazon)

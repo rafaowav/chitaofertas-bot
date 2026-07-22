@@ -2,11 +2,7 @@ import { createHash } from 'node:crypto';
 import { env } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../db/index.js';
-import { fetchProductDetail } from './detail-client.js';
-import type { ScrapeEnrichmentResult } from './detail-client.js';
 import type { ShopeeProduct, OfferData } from '../../types/index.js';
-
-const PRICE_DIVISOR = Number(env.SHOPEE_SCRAPE_PRICE_DIVISOR) || 100_000;
 
 /* ------------------------------------------------------------------ */
 /*  SOURCE A — Shopee Affiliate Open API (GraphQL)                     */
@@ -268,51 +264,13 @@ function normalizeNode(node: ProductOfferNode): ShopeeProduct {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Variant-aware scrape → affiliate price comparison                 */
-/* ------------------------------------------------------------------ */
-
-/** Convert Shopee integer price (e.g. 8550000 for R$85.50) to decimal */
-function fromShopeePrice(raw: number | undefined | null): number | null {
-  if (raw == null || raw <= 0) return null;
-  return Math.round((raw / PRICE_DIVISOR) * 100) / 100;
-}
-
-function tryMatchModelByPrice(
-  models: Array<{ price?: number; price_before_discount?: number; modelid: number; name?: string }>,
-  targetPrice: number | null,
-): { originPrice: number; currentPrice: number; model: { price?: number; price_before_discount?: number; modelid: number; name?: string } } | null {
-  if (targetPrice == null || targetPrice <= 0) return null;
-
-  const matches = models.filter((m) => {
-    const mp = fromShopeePrice(m.price);
-    return mp != null && Math.abs(mp - targetPrice) < 0.01;
-  });
-
-  if (matches.length === 1) {
-    const originPrice = fromShopeePrice(matches[0].price_before_discount);
-    const currentPrice = fromShopeePrice(matches[0].price);
-    if (originPrice != null && originPrice > 0 && currentPrice != null && currentPrice > 0) {
-      return { originPrice, currentPrice, model: matches[0] };
-    }
-  }
-
-  if (matches.length > 1) {
-    /* Multiple models share the same current price — try price_before_discount disambiguation */
-    const uniqueOrigin = new Set(matches.map((m) => m.price_before_discount));
-    if (uniqueOrigin.size === 1) {
-      const originPrice = fromShopeePrice(matches[0].price_before_discount);
-      const currentPrice = fromShopeePrice(matches[0].price);
-      if (originPrice != null && originPrice > 0 && currentPrice != null && currentPrice > 0) {
-        return { originPrice, currentPrice, model: matches[0] };
-      }
-    }
-  }
-
-  return null;
-}
-
-/* ------------------------------------------------------------------ */
-/*  SOURCE B enrichment — merges affiliate data with scrape detail     */
+/*  Product enrichment                                                 */
+/*                                                                     */
+/*  Note: Source B (Shopee product page scraping) was previously used  */
+/*  to extract the crossed-out original price and shop vouchers.       */
+/*  Shopee now blocks all non-browser API calls (error 90309999), and  */
+/*  the affiliate GraphQL API does not expose price_before_discount.   */
+/*  The bot displays the affiliate price as the source of truth.       */
 /* ------------------------------------------------------------------ */
 
 export async function enrichProduct(product: ShopeeProduct): Promise<OfferData> {
@@ -322,123 +280,21 @@ export async function enrichProduct(product: ShopeeProduct): Promise<OfferData> 
     title: product.title,
     description: product.description,
     price: product.price,
-    productDiscountAmount: undefined,
     couponDiscountAmount: undefined,
-    pixDiscountAmount: undefined,
     estimatedFinalPrice: product.estimatedFinalPrice,
-    hasRealDiscount: false,
     currency: product.currency,
     imageUrl: product.imageUrl,
     affiliateUrl: product.affiliateLink,
     discountRate: product.discountRate,
-    displayedDiscountPercent: undefined,
     commissionRate: product.commissionRate,
     ratingStar: product.ratingStar,
     soldCount: product.soldCount,
   };
 
-  if (!product.itemId || !product.shopId) {
-    logger.info({ itemId: product.itemId }, 'No itemId/shopId — cannot enrich');
-    return base;
-  }
-
-  const detail = await fetchProductDetail(product.itemId, product.shopId);
-  if (!detail) {
-    logger.info(
-      { itemId: product.itemId, shopId: product.shopId },
-      'Product page scrape unavailable — posting with affiliate price only',
-    );
-    return base;
-  }
-
-  const hasVariants = detail.hasVariants;
-  const logCtx = { itemId: product.itemId, shopId: product.shopId, hasVariants, modelCount: detail.models.length };
-
-  /* ---- Read pricing from product page (source of truth) ---- */
-  let pageOriginal: number | null = null;
-  let pageCurrent: number | null = null;
-  let pageOriginalSource: 'product_price_before_discount' | 'model_price_before_discount' | null = null;
-  let pageCurrentSource: 'product_price' | 'model_price' | null = null;
-  let exactVariantMatch = false;
-
-  if (detail.models.length === 1) {
-    /* Single model — use its prices directly */
-    pageOriginal = detail.originalPrice;
-    pageOriginalSource = detail.originalPriceField;
-    pageCurrent = detail.currentPrice;
-    pageCurrentSource = detail.currentPriceField;
-  } else if (detail.models.length > 1) {
-    /* Multi-model — try to match a variant by comparing model prices against detail.currentPrice */
-    const matched = tryMatchModelByPrice(detail.models, detail.currentPrice);
-    if (matched) {
-      pageOriginal = matched.originPrice;
-      pageOriginalSource = 'model_price_before_discount';
-      pageCurrent = matched.currentPrice;
-      pageCurrentSource = 'model_price';
-      exactVariantMatch = true;
-      logger.info({ ...logCtx, modelId: matched.model.modelid }, 'Exact variant match for page pricing');
-    } else if (detail.allOriginPricesSame && detail.originalPrice != null && detail.currentPrice != null) {
-      /* All models share same prices — safe to use aggregate */
-      pageOriginal = detail.originalPrice;
-      pageOriginalSource = detail.originalPriceField;
-      pageCurrent = detail.currentPrice;
-      pageCurrentSource = detail.currentPriceField;
-      logger.info({ ...logCtx }, 'All models share same prices — using aggregate');
-    } else {
-      /* Can't match — ambiguous pricing; suppress discount */
-      logger.info(
-        { ...logCtx },
-        'Multi-variant product — cannot resolve variant pricing; suppressing discount',
-      );
-    }
-  } else {
-    /* No models — use top-level fallback */
-    pageOriginal = detail.originalPrice;
-    pageOriginalSource = detail.originalPriceField;
-    pageCurrent = detail.currentPrice;
-    pageCurrentSource = detail.currentPriceField;
-  }
-
-  /* ---- Apply page pricing to OfferData ---- */
-  const hasRealDiscount =
-    pageOriginal != null &&
-    base.price != null &&
-    base.price > 0 &&
-    pageOriginal > base.price;
-
-  const productDiscountAmount: number | undefined = undefined;
-
-  base.originalPrice = pageOriginal ?? undefined;
-  base.originalPriceSource = pageOriginalSource ?? undefined;
-  base.displayedDiscountPercent = detail.displayedDiscountPercent ?? undefined;
-  base.scrapeHasVariants = hasVariants || (detail.models.length > 1) || undefined;
-  base.scrapeExactVariantMatch = exactVariantMatch || undefined;
-  base.productDiscountAmount = productDiscountAmount;
-  base.hasRealDiscount = hasRealDiscount;
-
-  /* ---- Coupon from scrape ---- */
-  if (detail.hasReliableShopCoupon) {
-    base.couponDiscountAmount = detail.couponDiscountValue ?? undefined;
-  }
-
   logger.info(
-    {
-      ...logCtx,
-      pageOriginal,
-      pageCurrent,
-      pageOriginalSource,
-      pageCurrentSource,
-      exactVariantMatch,
-      pageDiscountBadge: detail.displayedDiscountPercent,
-      hasRealDiscount,
-      productDiscountAmount,
-      hasReliableShopCoupon: detail.hasReliableShopCoupon,
-      couponDiscountValue: detail.couponDiscountValue,
-    },
-    'Scrape enrichment merged — page pricing applied',
+    { itemId: product.itemId, shopId: product.shopId, price: product.price },
+    'Product enriched from affiliate API data',
   );
 
   return base;
 }
-
-export { fetchProductDetail } from './detail-client.js';
